@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bier Quiz: Privat oder Brau Union?</title>
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons (Inline SVGs used below, but kept for potential future use) -->
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            overflow: hidden; 
+        }
+
+        .card-stack {
+            perspective: 1000px;
+        }
+
+        .swipe-card {
+            /* Default transition for drag/reset/lock-in */
+            transition: transform 0.2s ease, opacity 0.3s ease; 
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Animation Classes for Fly-out (must override default transition) */
+        .animate-fly-left {
+            transform: translateX(-150%) rotate(-20deg) !important;
+            opacity: 0;
+            transition: transform 0.3s ease, opacity 0.3s ease !important; 
+        }
+        
+        .animate-fly-right {
+            transform: translateX(150%) rotate(20deg) !important;
+            opacity: 0;
+            transition: transform 0.3s ease, opacity 0.3s ease !important;
+        }
+
+        .no-select {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- DATEN ---
+        // true = Privat/Unabhängig, false = Brau Union (Heineken)
+        const beerData = [
+            { name: "Gösser", isPrivate: false, color: "bg-green-700" },
+            { name: "Stiegl", isPrivate: true, color: "bg-red-600" },
+            { name: "Zipfer", isPrivate: false, color: "bg-gray-200 text-gray-800" }, 
+            { name: "Murauer", isPrivate: true, color: "bg-yellow-500" },
+            { name: "Puntigamer", isPrivate: false, color: "bg-blue-600" },
+            { name: "Ottakringer", isPrivate: true, color: "bg-yellow-400 text-gray-900" },
+            { name: "Wieselburger", isPrivate: false, color: "bg-yellow-600" },
+            { name: "Hirter", isPrivate: true, color: "bg-blue-800" },
+            { name: "Schwechater", isPrivate: false, color: "bg-red-700" },
+            { name: "Freistädter", isPrivate: true, color: "bg-red-800" },
+            { name: "Heineken", isPrivate: false, color: "bg-green-600" },
+            { name: "Trumer", isPrivate: true, color: "bg-white text-green-900 border-2 border-green-900" },
+            { name: "Schladminger", isPrivate: false, color: "bg-yellow-500" },
+            { name: "Eggenberg", isPrivate: true, color: "bg-gray-800" },
+            { name: "Villacher", isPrivate: false, color: "bg-blue-500" }, 
+            { name: "Zwettler", isPrivate: true, color: "bg-green-800" },
+            { name: "Kaiser", isPrivate: false, color: "bg-yellow-500" },
+            { name: "Mohrenbräu", isPrivate: true, color: "bg-black" },
+            { name: "Edelweiss", isPrivate: false, color: "bg-orange-500" },
+            { name: "Reininghaus", isPrivate: false, color: "bg-amber-700" },
+            { name: "Fohrenburger", isPrivate: true, color: "bg-red-400" },
+            { name: "Baumgartner", isPrivate: true, color: "bg-green-600" },
+            { name: "Schremser", isPrivate: true, color: "bg-indigo-700" },
+            { name: "Rieder Bier", isPrivate: true, color: "bg-blue-400" },
+            { name: "Linzer Bier", isPrivate: false, color: "bg-red-900" },
+        ];
+
+        // --- SVG ICONS ---
+        // Icon for the beer mug
+        const BeerIcon = ({ className }) => (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M17 11h1a3 3 0 0 1 0 6h-1" />
+                <path d="M9 12v6" />
+                <path d="M13 12v6" />
+                <path d="M14 7.5c-1 0-1.44.5-3 .5s-2-.5-3-.5-1.72.5-2.5.5a2.5 2.5 0 0 1 0-5c.78 0 1.57.5 2.5.5S9.44 2 11 2s2 1.5 3 1.5 1.72-.5 2.5-.5a2.5 2.5 0 0 1 0 5c-.78 0-1.5-.5-2.5-.5Z" />
+                <path d="M5 8v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8" />
+            </svg>
+        );
+
+        // Icon for the factory (Konzern/Company)
+        const FactoryIcon = ({ className }) => (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+                <path d="M17 18h1" />
+                <path d="M12 18h1" />
+                <path d="M7 18h1" />
+            </svg>
+        );
+
+        // Icon for the heart (Privat/Independent)
+        const HeartIcon = ({ className }) => (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+            </svg>
+        );
+
+        // Icon for correct checkmark
+        const CheckCircle = ({ className }) => (
+             <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>
+            </svg>
+        );
+
+        // Icon for incorrect X
+        const XCircle = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" /><path d="m15 9-6 6"/><path d="m9 9 6 6"/>
+            </svg>
+        );
+
+        // --- COMPONENTS ---
+
+        const StartScreen = ({ onStart }) => (
+            <div className="flex flex-col items-center justify-center h-full p-6 text-center animate-fade-in">
+                <div className="bg-yellow-400 p-4 rounded-full mb-6 shadow-lg">
+                    <BeerIcon className="w-16 h-16 text-white" />
+                </div>
+                <h1 className="text-4xl font-extrabold text-gray-800 mb-4">Bier Check</h1>
+                <p className="text-gray-600 mb-8 text-lg">
+                    Wem gehört das Bier? Testen Sie Ihr Wissen über 25 österreichische Marken.
+                </p>
+                <div className="space-y-4 w-full max-w-xs text-left bg-white p-4 rounded-xl shadow-sm mb-8">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-red-100 rounded-lg text-red-600"><FactoryIcon className="w-5 h-5"/></div>
+                        <div>
+                            <span className="font-bold block">Links wischen</span>
+                            <span className="text-sm text-gray-500">Brau Union / Konzern</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-green-100 rounded-lg text-green-600"><HeartIcon className="w-5 h-5"/></div>
+                        <div>
+                            <span className="font-bold block">Rechts wischen</span>
+                            <span className="text-sm text-gray-500">Privat / Unabhängig</span>
+                        </div>
+                    </div>
+                </div>
+                <button 
+                    onClick={onStart}
+                    className="w-full max-w-xs bg-gray-900 text-white py-4 rounded-2xl font-bold text-xl shadow-xl active:scale-95 transition-transform"
+                >
+                    Starten
+                </button>
+            </div>
+        );
+
+        const ResultScreen = ({ score, maxScore, onRestart }) => {
+            const percentage = Math.round((score / maxScore) * 100);
+            
+            let message = "";
+            let subMessage = "";
+            
+            if (percentage === 100) {
+                message = "Bier-Sommelier!";
+                subMessage = "Du kennst jeden Sudkessel in Österreich.";
+            } else if (percentage >= 80) {
+                message = "Starke Leistung!";
+                subMessage = "Du trinkst sehr bewusst.";
+            } else if (percentage >= 50) {
+                message = "Geht so...";
+                subMessage = "Hauptsache es schmeckt, oder?";
+            } else {
+                message = "Oje...";
+                subMessage = "Du unterstützt wohl gerne Großkonzerne.";
+            }
+
+            return (
+                <div className="flex flex-col items-center justify-center h-full p-6 text-center animate-fade-in">
+                    <div className="relative w-40 h-40 flex items-center justify-center mb-6">
+                        <svg className="w-full h-full transform -rotate-90">
+                            <circle cx="80" cy="80" r="70" stroke="#e5e7eb" strokeWidth="12" fill="none" />
+                            <circle 
+                                cx="80" cy="80" r="70" 
+                                stroke={percentage > 50 ? "#16a34a" : "#dc2626"} 
+                                strokeWidth="12" 
+                                fill="none" 
+                                strokeDasharray="440" 
+                                strokeDashoffset={440 - (440 * percentage) / 100}
+                                className="transition-all duration-1000 ease-out"
+                            />
+                        </svg>
+                        <span className="absolute text-3xl font-bold text-gray-800">{percentage}%</span>
+                    </div>
+                    
+                    <h2 className="text-3xl font-bold text-gray-900 mb-2">{message}</h2>
+                    <p className="text-gray-600 mb-8">{subMessage}</p>
+                    
+                    <div className="grid grid-cols-2 gap-4 w-full max-w-xs mb-8">
+                        <div className="bg-white p-3 rounded-xl shadow-sm">
+                            <span className="block text-2xl font-bold text-green-600">{score}</span>
+                            <span className="text-xs text-gray-500 uppercase tracking-wide">Richtig</span>
+                        </div>
+                        <div className="bg-white p-3 rounded-xl shadow-sm">
+                            <span className="block text-2xl font-bold text-gray-400">{maxScore}</span>
+                            <span className="text-xs text-gray-500 uppercase tracking-wide">Gesamt</span>
+                        </div>
+                    </div>
+
+                    <button 
+                        onClick={onRestart}
+                        className="w-full max-w-xs bg-gray-900 text-white py-4 rounded-2xl font-bold text-lg shadow-xl active:scale-95 transition-transform"
+                    >
+                        Nochmal spielen
+                    </button>
+                </div>
+            );
+        };
+        
+        // Feedback component shown after an answer is chosen
+        const FeedbackOverlay = ({ feedback }) => {
+            const { isCorrect, correctType } = feedback;
+            const Icon = isCorrect ? CheckCircle : XCircle;
+            const text = isCorrect ? 'RICHTIG' : 'FALSCH';
+            const bgColor = isCorrect ? 'bg-green-500' : 'bg-red-500';
+            const highlightColor = isCorrect ? 'text-green-300' : 'text-red-300';
+            const typeText = correctType === 'PRIVAT' ? 'Privatbrauerei' : 'Konzernmarke';
+
+            return (
+                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 bg-black/70 rounded-3xl backdrop-blur-sm animate-fade-in transition-opacity duration-300">
+                    <div className={`p-6 rounded-full mb-4 ${bgColor} shadow-2xl`}>
+                        <Icon className="w-16 h-16 text-white" />
+                    </div>
+                    <h3 className="text-5xl font-extrabold text-white mb-4">{text}!</h3>
+                    <p className="text-lg text-gray-300 text-center">
+                        Das ist eine <span className={`${highlightColor} font-bold`}>{typeText}</span>.
+                    </p>
+                </div>
+            );
+        };
+
+
+        const Game = ({ onEnd }) => {
+            const [cards, setCards] = useState(beerData);
+            const [score, setScore] = useState(0);
+            const [animationClass, setAnimationClass] = useState("");
+            const [dragStartX, setDragStartX] = useState(null);
+            const [dragOffset, setDragOffset] = useState(0);
+            const [feedback, setFeedback] = useState(null); // { isCorrect: bool, correctType: string, swipeDirection: string }
+            const [isAnimating, setIsAnimating] = useState(false); // Locks interaction during fly-out/feedback
+
+            // Shuffeln beim Start
+            useEffect(() => {
+                setCards([...beerData].sort(() => Math.random() - 0.5));
+            }, []);
+
+            const currentCard = cards[0];
+
+            const handleSwipe = (direction) => { // direction: 'left' or 'right'
+                if (!currentCard || isAnimating) return; 
+
+                setIsAnimating(true); // Sperre Interaktion
+                
+                const guessedPrivate = direction === 'right';
+                const isCorrect = guessedPrivate === currentCard.isPrivate;
+                const correctType = currentCard.isPrivate ? "PRIVAT" : "KONZERN";
+
+                // 1. Feedback setzen und Score aktualisieren
+                setFeedback({ isCorrect, correctType, swipeDirection: direction });
+                if (isCorrect) setScore(s => s + 1); 
+                
+                // 2. Fly-out Animation starten nach 1.0 Sekunde (Zeit zum Lesen des Feedbacks)
+                setTimeout(() => {
+                    setAnimationClass(direction === 'left' ? 'animate-fly-left' : 'animate-fly-right');
+                    
+                    // 3. Kartenwechsel und Cleanup nach 0.3 Sekunden (Dauer des Fly-out)
+                    setTimeout(() => {
+                        const newCards = cards.slice(1);
+                        setCards(newCards);
+                        setAnimationClass("");
+                        setDragOffset(0);
+                        setDragStartX(null);
+                        setFeedback(null);
+                        setIsAnimating(false);
+                        
+                        if (newCards.length === 0) {
+                            onEnd(score + (isCorrect ? 1 : 0), beerData.length);
+                        }
+                    }, 300); 
+                }, 1000); 
+            };
+
+            // Touch Handlers for mobile swipe feel
+            const handleTouchStart = (e) => {
+                if (isAnimating || feedback) return;
+                setDragStartX(e.touches[0].clientX);
+            };
+
+            const handleTouchMove = (e) => {
+                if (dragStartX === null || isAnimating || feedback) return;
+                const currentX = e.touches[0].clientX;
+                const diff = currentX - dragStartX;
+                setDragOffset(diff);
+            };
+
+            const handleTouchEnd = () => {
+                if (isAnimating || feedback) return;
+
+                if (Math.abs(dragOffset) > 100) {
+                    // Lock position and trigger swipe/feedback
+                    const direction = dragOffset > 0 ? 'right' : 'left';
+                    const lockedOffset = direction === 'right' ? 50 : -50;
+                    setDragOffset(lockedOffset); // Lock visual offset slightly
+                    handleSwipe(direction);
+                } else {
+                    // Reset if swipe wasn't strong enough
+                    setDragOffset(0);
+                }
+                setDragStartX(null);
+            };
+
+            if (!currentCard) return null;
+
+            // --- Card Transformation Logic ---
+            let cardTransformStyle = {};
+            if (feedback) {
+                // Lock the card in the initial swipe position for feedback viewing
+                const lockedOffset = feedback.swipeDirection === 'right' ? 50 : -50;
+                const lockedRotation = feedback.swipeDirection === 'right' ? 5 : -5;
+                cardTransformStyle = {
+                    transform: `translateX(${lockedOffset}px) rotate(${lockedRotation}deg)`
+                };
+            } else if (!animationClass) {
+                // Allow drag/swipe manipulation, but only if not currently flying out
+                const rotation = dragOffset * 0.1;
+                cardTransformStyle = {
+                    transform: `translateX(${dragOffset}px) rotate(${rotation}deg)`
+                };
+            }
+
+            const opacityRight = Math.min(Math.max(dragOffset / 100, 0), 1);
+            const opacityLeft = Math.min(Math.max(-dragOffset / 100, 0), 1);
+
+
+            // Helper function to handle mouse up/leave consistent with touch end logic
+            const handleMouseEnd = () => {
+                if (isAnimating || feedback) return;
+
+                if (Math.abs(dragOffset) > 100) {
+                    const direction = dragOffset > 0 ? 'right' : 'left';
+                    const lockedOffset = direction === 'right' ? 50 : -50;
+                    setDragOffset(lockedOffset);
+                    handleSwipe(direction);
+                } else {
+                    setDragOffset(0);
+                }
+                setDragStartX(null);
+            };
+            
+            // Helper function for mouse move
+            const handleMouseMove = (e) => {
+                if (dragStartX !== null && !isAnimating && !feedback) {
+                    setDragOffset(e.clientX - dragStartX);
+                }
+            };
+
+            return (
+                <div className="flex flex-col h-full w-full max-w-md mx-auto relative overflow-hidden">
+                    {/* Header / Progress */}
+                    <div className="h-16 flex items-center justify-between px-6 pt-4 z-10">
+                        <div className="text-gray-400 font-bold text-sm">
+                             {beerData.length - cards.length + 1} / {beerData.length}
+                        </div>
+                        <div className="bg-gray-200 h-2 w-1/2 rounded-full">
+                            <div 
+                                className="bg-green-500 h-2 rounded-full transition-all duration-300" 
+                                style={{ width: `${((beerData.length - cards.length + 1) / beerData.length) * 100}%` }}
+                            ></div>
+                        </div>
+                    </div>
+
+                    {/* Card Container */}
+                    <div className="flex-1 relative flex items-center justify-center card-stack p-4">
+                        
+                        {/* Background Card (for depth) */}
+                        {cards[1] && (
+                            <div className="absolute w-[90%] h-[60vh] bg-white rounded-3xl shadow-sm transform scale-95 translate-y-4 -z-10 border border-gray-100"></div>
+                        )}
+
+                        {/* Active Card */}
+                        <div 
+                            className={`swipe-card bg-white rounded-3xl overflow-hidden flex flex-col h-[65vh] w-full max-w-sm border border-gray-200 no-select cursor-grab active:cursor-grabbing ${animationClass}`}
+                            style={cardTransformStyle}
+                            onTouchStart={handleTouchStart}
+                            onTouchMove={handleTouchMove}
+                            onTouchEnd={handleTouchEnd}
+                            // Mouse fallback for desktop testing
+                            onMouseDown={(e) => { if (!isAnimating && !feedback) setDragStartX(e.clientX); }}
+                            onMouseMove={handleMouseMove}
+                            onMouseUp={handleMouseEnd}
+                            onMouseLeave={handleMouseEnd}
+                        >
+                            {/* Overlay Indicators for Swipe Feedback (hidden when feedback is active) */}
+                            {!feedback && (
+                                <>
+                                    <div 
+                                        className="absolute top-8 left-8 border-4 border-green-500 text-green-500 rounded-lg px-4 py-2 text-2xl font-black uppercase transform -rotate-12 z-20 pointer-events-none transition-opacity"
+                                        style={{ opacity: opacityRight }}
+                                    >
+                                        PRIVAT
+                                    </div>
+                                    <div 
+                                        className="absolute top-8 right-8 border-4 border-red-500 text-red-500 rounded-lg px-4 py-2 text-2xl font-black uppercase transform rotate-12 z-20 pointer-events-none transition-opacity"
+                                        style={{ opacity: opacityLeft }}
+                                    >
+                                        KONZERN
+                                    </div>
+                                </>
+                            )}
+                            
+                            {/* Card Content */}
+                            <div className={`h-2/3 flex items-center justify-center p-8 relative ${currentCard.color}`}>
+                                <BeerIcon className={`w-32 h-32 ${currentCard.name === 'Zipfer' || currentCard.name === 'Ottakringer' || currentCard.name.includes('Trumer') ? 'text-gray-800' : 'text-white/90'}`} />
+                                <div className="absolute bottom-0 w-full h-24 bg-gradient-to-t from-black/50 to-transparent"></div>
+                                {/* Feedback Overlay (shows over content) */}
+                                {feedback && <FeedbackOverlay feedback={feedback} />}
+                            </div>
+                            
+                            <div className="h-1/3 p-6 flex flex-col justify-center items-center text-center bg-white relative">
+                                <h2 className="text-3xl font-black text-gray-800 tracking-tight mb-2">{currentCard.name}</h2>
+                                <p className="text-gray-400 text-sm font-medium uppercase tracking-widest">Österreich</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Controls */}
+                    <div className="h-24 px-8 pb-8 flex items-center justify-center gap-6 z-20">
+                        <button 
+                            onClick={() => handleSwipe('left')}
+                            disabled={isAnimating || !!feedback}
+                            className="w-16 h-16 rounded-full bg-white shadow-xl flex items-center justify-center text-red-500 hover:bg-red-50 active:scale-90 transition-transform border border-gray-100 disabled:opacity-50"
+                        >
+                            <FactoryIcon className="w-8 h-8" />
+                        </button>
+
+                        {/* Info/Hint (Optional, kept small) */}
+                        <div className="text-xs text-gray-300 font-medium">Swipe</div>
+
+                        <button 
+                            onClick={() => handleSwipe('right')}
+                            disabled={isAnimating || !!feedback}
+                            className="w-16 h-16 rounded-full bg-white shadow-xl flex items-center justify-center text-green-500 hover:bg-green-50 active:scale-90 transition-transform border border-gray-100 disabled:opacity-50"
+                        >
+                            <HeartIcon className="w-8 h-8" />
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [screen, setScreen] = useState('start'); // start, game, result
+            const [finalScore, setFinalScore] = useState(0);
+            const [totalQuestions, setTotalQuestions] = useState(0);
+
+            const handleGameEnd = (score, total) => {
+                setFinalScore(score);
+                setTotalQuestions(total);
+                setScreen('result');
+            };
+
+            return (
+                <div className="fixed inset-0 w-full h-full bg-slate-50">
+                    {screen === 'start' && <StartScreen onStart={() => setScreen('game')} />}
+                    {screen === 'game' && <Game onEnd={handleGameEnd} />}
+                    {screen === 'result' && (
+                        <ResultScreen 
+                            score={finalScore} 
+                            maxScore={totalQuestions} 
+                            onRestart={() => setScreen('start')} 
+                        />
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
