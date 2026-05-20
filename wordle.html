@@ -48,6 +48,8 @@ body{display:flex;flex-direction:column;max-width:500px;margin:0 auto;position:r
 .cell.correct{background:var(--correct);border-color:var(--correct);animation:flipIn .5s}
 .cell.present{background:var(--present);border-color:var(--present);animation:flipIn .5s}
 .cell.absent{background:var(--absent);border-color:var(--absent);animation:flipIn .5s}
+.cell.cursor{border-color:var(--light);border-width:3px;transition:border-color .1s;animation:blink .8s infinite}
+@keyframes blink{0%,100%{border-color:var(--light)}50%{border-color:var(--border-light)}}
 
 /* KEYBOARD */
 .keyboard{flex-shrink:0;padding:6px 4px 12px;display:flex;flex-direction:column;gap:6px;max-width:500px;width:100%}
@@ -200,7 +202,7 @@ const SUPABASE_KEY="sb_publishable_mRUEk47R6ciRiPqJGXT-IQ_OjPmNp4C";
 const MAX_LIVES=5;
 const GUESSES=6;
 
-let state={user:null,lives:5,lastLifeUse:0,level:1,guesses:[],currentGuess:"",gameOver:false,
+let state={user:null,lives:5,lastLifeUse:0,level:1,guesses:[],currentGuess:["","","","","",""],gameOver:false,cursorPos:0,
   stats:{played:0,won:0,streak:0,maxStreak:0,dist:[0,0,0,0,0,0]},lastLifeDay:""};
 let hsError="";
 let _lastScores=[];
@@ -364,7 +366,8 @@ function startGame(){
   state.lastLifeUse=Date.now();
   saveState();
   state.guesses=[];
-  state.currentGuess="";
+  state.currentGuess=["","","","","",""];
+  state.cursorPos=0;
   state.gameOver=false;
   showScreen("gameScreen");
   buildBoard();
@@ -384,6 +387,7 @@ function buildBoard(){
       let cell=document.createElement("div");
       cell.className="cell";
       cell.id="cell"+r+"_"+c;
+      cell.onclick=function(){if(r===state.guesses.length&&!state.gameOver){state.cursorPos=c;renderCurrentRow()}};
       board.appendChild(cell);
     }
   }
@@ -410,13 +414,15 @@ function buildKeyboard(){
 
 function handleKey(key){
   if(state.gameOver)return;
-  if(key==="Del"){state.currentGuess=state.currentGuess.slice(0,-1)}
-  else if(key==="Enter"){
-    if(state.currentGuess.length<6){showToast("Zu kurz!");return}
+  if(key==="Del"){
+    if(state.cursorPos>0){state.cursorPos--;state.currentGuess[state.cursorPos]=""}
+  }else if(key==="Enter"){
+    if(state.currentGuess.some(c=>!c)){showToast("Alle 6 Buchstaben eingeben!");return}
     submitGuess();return;
   }else{
-    if(state.currentGuess.length>=6)return;
-    state.currentGuess+=key.toUpperCase();
+    if(state.cursorPos>=6)return;
+    state.currentGuess[state.cursorPos]=key.toUpperCase();
+    state.cursorPos=Math.min(5,state.cursorPos+1);
   }
   renderCurrentRow();
 }
@@ -426,14 +432,14 @@ function renderCurrentRow(){
   for(let c=0;c<6;c++){
     let cell=document.getElementById("cell"+row+"_"+c);
     cell.textContent=state.currentGuess[c]||"";
-    if(state.currentGuess[c])cell.classList.add("filled");
-    else cell.classList.remove("filled");
+    cell.classList.toggle("filled",!!state.currentGuess[c]);
+    cell.classList.toggle("cursor",c===state.cursorPos&&!state.gameOver);
   }
 }
 
 function submitGuess(){
   let word=getCurrentWord();
-  let guess=state.currentGuess.toUpperCase();
+  let guess=state.currentGuess.join("").toUpperCase();
   let row=state.guesses.length;
 
   if(validWords&&!validWords.has(guess.toLowerCase())){
@@ -453,7 +459,8 @@ function submitGuess(){
   }
 
   state.guesses.push(guess);
-  state.currentGuess="";
+  state.currentGuess=["","","","","",""];
+  state.cursorPos=0;
 
   let delay=0;
   for(let c=0;c<6;c++){
@@ -665,6 +672,8 @@ document.addEventListener("keydown",e=>{
   if(!document.getElementById("gameScreen").classList.contains("hidden")){
     if(e.key==="Backspace")handleKey("Del");
     else if(e.key==="Enter")handleKey("Enter");
+    else if(e.key==="ArrowLeft"&&state.cursorPos>0){state.cursorPos--;renderCurrentRow()}
+    else if(e.key==="ArrowRight"&&state.cursorPos<5){state.cursorPos++;renderCurrentRow()}
     else if(/^[a-zA-ZäöüÄÖÜ]$/.test(e.key))handleKey(e.key.toLowerCase());
   }
 });
